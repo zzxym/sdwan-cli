@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version for this release'
+        description: 'EasyTier 版本号'
         type: string
         default: 'v2.4.3'
         required: true
       make_latest:
-        description: 'Mark this release as latest'
+        description: '标记为最新版本'
         type: boolean
         default: true
         required: true
@@ -24,72 +24,72 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        
-      # 创建资产目录
-      - name: Create artifacts directory
+
+      # 创建下载目录
+      - name: Create download directory
         run: mkdir -p release_assets
 
-      # 下载特定版本的所有发布资产
+      # 🎉 解决方案：添加 PAT (Personal Access Token) 认证
+      # 使用已认证请求直接下载 Release 资产
       - name: Download Release Assets
-        uses: montudor/action-download-release-asset@v2.1
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          repo: 'EasyTier/EasyTier'
-          version: ${{ inputs.version }}
-          out-path: 'release_assets'
-      
-      # 打印下载的文件列表 (可选，用于调试)
-      - name: List downloaded assets
         run: |
-          echo "Downloaded assets:"
-          ls -l release_assets
+          RELEASE_URL="https://api.github.com/repos/EasyTier/EasyTier/releases/tags/$VERSION"
+          ASSETS_URL=$(curl -sH "Authorization: token ${{ secrets.EASYTIER_TOKEN }}" $RELEASE_URL | jq -r '.assets[].browser_download_url')
           
-      # 处理特殊需求：解压然后重新打包为命名规范的压缩包
-      - name: Process Assets
+          for url in $ASSETS_URL; do
+            filename=$(echo $url | grep -o '[^/]*$')
+            echo "正在下载: $filename"
+            curl -sL -H "Authorization: token ${{ secrets.EASYTIER_TOKEN }}" $url -o "release_assets/$filename"
+          done
         env:
           VERSION: ${{ inputs.version }}
-        run: |
-          # 创建临时工作目录
-          mkdir temp_assets processed_assets
           
-          # 处理每个下载的资产
-          for file in release_assets/*; do
-            filename=$(basename "$file")
-            base_name="${filename%.*}"
-            
-            echo "==> Processing: $base_name"
-            
-            # 特殊处理：Easytier-Magisk 压缩包
-            if [[ "$base_name" == "Easytier-Magisk"* ]]; then
-              # 解压到以版本号命名的新目录
-              mkdir -p "temp_assets/Easytier-Magisk-$VERSION"
-              unzip -q "$file" -d "temp_assets/Easytier-Magisk-$VERSION"
-              
-              # 重新压缩到 processed_assets 目录
-              cd "temp_assets/Easytier-Magisk-$VERSION"
-              zip -r "../../processed_assets/Easytier-Magisk-$VERSION.zip" .
-              cd ../..
-            # 其他压缩包只需重命名
-            else
-              new_name="${base_name}-${VERSION}.${file##*.}"
-              cp "$file" "processed_assets/$new_name"
+      # 重命名文件添加版本号
+      - name: Rename assets with version
+        run: |
+          cd release_assets
+          for f in *; do
+            # 过滤掉已经包含版本号的文件名
+            if [[ ! "$f" =~ -v?[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+              ext="${f##*.}"
+              name="${f%.*}"
+              mv "$f" "$name-$VERSION.$ext"
             fi
           done
+        env:
+          VERSION: ${{ inputs.version }}
           
-          # 清理临时文件
-          rm -rf temp_assets
+      # 特殊处理 Magisk 包
+      - name: Process Magisk Asset
+        run: |
+          MAGISK_ASSET=$(find release_assets -type f -iname "easytier-magisk*$VERSION*")
           
-          # 打印最终文件列表
-          echo "Processed assets:"
-          ls -l processed_assets
-      
+          # 确保找到文件且仅有一个
+          if [[ -n "$MAGISK_ASSET" ]]; then
+            # Magisk 包内部结构
+            mkdir -p magisk_temp
+            unzip -q "$MAGISK_ASSET" -d magisk_temp/
+            
+            # 清理原文件并重新压缩为标准格式
+            rm "$MAGISK_ASSET"
+            cd magisk_temp
+            zip -r "../release_assets/Easytier-Magisk-$VERSION.zip" .
+            cd ..
+            rm -rf magisk_temp
+          else
+            echo "⚠️ Warning: Magisk 文件未找到! 跳过处理."
+          fi
+        env:
+          VERSION: ${{ inputs.version }}
+
+      # 创建发布
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ inputs.version }}
           draft: true
           files: |
-            processed_assets/*
+            release_assets/*
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ inputs.version }}
           make_latest: ${{ inputs.make_latest }}
