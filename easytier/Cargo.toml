@@ -1,11 +1,11 @@
 [package]
-name = "easytier"
+name = "sdwan"
 description = "A full meshed p2p VPN, connecting all your devices in one network with one command."
-homepage = "https://github.com/EasyTier/EasyTier"
-repository = "https://github.com/EasyTier/EasyTier"
+homepage = "https://github.com/zzxym/sdwan-cli"
+repository = "https://github.com/zzxym/sdwan-cli"
 version = "2.4.3"
 edition = "2021"
-authors = ["kkrainbow"]
+authors = ["zzxym"]
 keywords = ["vpn", "p2p", "network", "easytier"]
 categories = ["network-programming", "command-line-utilities"]
 rust-version = "1.89.0"
