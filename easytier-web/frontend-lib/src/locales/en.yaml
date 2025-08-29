@@ -1,13 +1,13 @@
 network: Network
 networking_method: Networking Method
-public_server: Public Server
+public_server: Center Server
 manual: Manual
 standalone: Standalone
 virtual_ipv4: Virtual IPv4
 virtual_ipv4_dhcp: DHCP
 network_name: Network Name
 network_secret: Network Secret
-public_server_url: Public Server URL
+public_server_url: Center Server URL
 peer_urls: Peer URLs
 proxy_cidrs: Subnet Proxy CIDRs
 enable_vpn_portal: Enable VPN Portal
@@ -192,7 +192,7 @@ about:
   author: Author
   homepage: Homepage
   license: License
-  description: 'EasyTier is a simple, safe and decentralized VPN networking solution implemented with the Rust language and Tokio framework.'
+  description: ' This is a simple and safe networking solution.'
   check_update: Check Update
 
 event:
