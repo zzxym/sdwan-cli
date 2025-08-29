@@ -192,7 +192,7 @@ about:
   author: Author
   homepage: Homepage
   license: License
-  description: ' This is a simple and safe networking solution.'
+  description: ' A simple, secure networking solution.'
   check_update: Check Update
 
 event:
