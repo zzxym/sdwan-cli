@@ -3,13 +3,28 @@ name: EasyTier Release
 on:
   workflow_dispatch:
     inputs:
+      core_run_id:
+        description: 'The run id of EasyTier-Core Action in EasyTier repo'
+        type: number
+        default: 10322498549
+        required: true
+      gui_run_id:
+        description: 'The run id of EasyTier-GUI Action in EasyTier repo'
+        type: number
+        default: 10322498557
+        required: true
+      mobile_run_id:
+        description: 'The run id of EasyTier-Mobile Action in EasyTier repo'
+        type: number
+        default: 10322498555
+        required: true
       version:
-        description: 'EasyTier 版本号'
+        description: 'Version for this release'
         type: string
         default: 'v2.4.3'
         required: true
       make_latest:
-        description: '标记为最新版本'
+        description: 'Mark this release as latest'
         type: boolean
         default: true
         required: true
@@ -22,74 +37,63 @@ jobs:
     if: contains('["zzxym"]', github.actor)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      -
+        name: Checkout
         uses: actions/checkout@v4
 
-      # 创建下载目录
-      - name: Create download directory
-        run: mkdir -p release_assets
+      - name: Download Core Artifact
+        uses: dawidd6/action-download-artifact@v11
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          run_id: ${{ inputs.core_run_id }}
+          repo: EasyTier/EasyTier
+          path: release_assets
 
-      # 🎉 解决方案：添加 PAT (Personal Access Token) 认证
-      # 使用已认证请求直接下载 Release 资产
-      - name: Download Release Assets
-        run: |
-          RELEASE_URL="https://api.github.com/repos/EasyTier/EasyTier/releases/tags/$VERSION"
-          ASSETS_URL=$(curl -sH "Authorization: token ${{ secrets.EASYTIER_TOKEN }}" $RELEASE_URL | jq -r '.assets[].browser_download_url')
-          
-          for url in $ASSETS_URL; do
-            filename=$(echo $url | grep -o '[^/]*$')
-            echo "正在下载: $filename"
-            curl -sL -H "Authorization: token ${{ secrets.EASYTIER_TOKEN }}" $url -o "release_assets/$filename"
-          done
+      - name: Download GUI Artifact
+        uses: dawidd6/action-download-artifact@v11
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          run_id: ${{ inputs.gui_run_id }}
+          repo: EasyTier/EasyTier
+          path: release_assets_nozip
+
+      - name: Download Mobile Artifact
+        uses: dawidd6/action-download-artifact@v11
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          run_id: ${{ inputs.mobile_run_id }}
+          repo: EasyTier/EasyTier
+          path: release_assets_nozip
+
+      - name: Zip release assets
         env:
           VERSION: ${{ inputs.version }}
-          
-      # 重命名文件添加版本号
-      - name: Rename assets with version
         run: |
+          mkdir zipped_assets
+
+          find release_assets_nozip -type f -exec mv {} zipped_assets \;
+          ls -l -R ./zipped_assets
+
           cd release_assets
-          for f in *; do
-            # 过滤掉已经包含版本号的文件名
-            if [[ ! "$f" =~ -v?[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-              ext="${f##*.}"
-              name="${f%.*}"
-              mv "$f" "$name-$VERSION.$ext"
+          ls -l -R ./
+          chmod -R 755 .
+          for x in `ls`; do
+            if [ "$x" = "Easytier-Magisk" ]; then
+              # for Easytier-Magisk, make sure files are in the root of the zip
+              cd $x;
+              zip -r ../../zipped_assets/$x-${VERSION}.zip .;
+              cd ..;
+            else
+              zip -r ../zipped_assets/$x-${VERSION}.zip $x;
             fi
           done
-        env:
-          VERSION: ${{ inputs.version }}
-          
-      # 特殊处理 Magisk 包
-      - name: Process Magisk Asset
-        run: |
-          MAGISK_ASSET=$(find release_assets -type f -iname "easytier-magisk*$VERSION*")
-          
-          # 确保找到文件且仅有一个
-          if [[ -n "$MAGISK_ASSET" ]]; then
-            # Magisk 包内部结构
-            mkdir -p magisk_temp
-            unzip -q "$MAGISK_ASSET" -d magisk_temp/
-            
-            # 清理原文件并重新压缩为标准格式
-            rm "$MAGISK_ASSET"
-            cd magisk_temp
-            zip -r "../release_assets/Easytier-Magisk-$VERSION.zip" .
-            cd ..
-            rm -rf magisk_temp
-          else
-            echo "⚠️ Warning: Magisk 文件未找到! 跳过处理."
-          fi
-        env:
-          VERSION: ${{ inputs.version }}
 
-      # 创建发布
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ inputs.version }}
           draft: true
           files: |
-            release_assets/*
+            ./zipped_assets/*
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ inputs.version }}
-          make_latest: ${{ inputs.make_latest }}
