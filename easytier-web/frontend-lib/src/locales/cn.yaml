@@ -1,13 +1,13 @@
 network: 网络
 networking_method: 网络方式
-public_server: 公共服务器
+public_server: 中心服务器
 manual: 手动
 standalone: 独立
 virtual_ipv4: 虚拟IPv4地址
 virtual_ipv4_dhcp: DHCP
 network_name: 网络名称
 network_secret: 网络密码
-public_server_url: 公共服务器地址
+public_server_url: 中心服务器地址
 peer_urls: 对等节点地址
 proxy_cidrs: 子网代理CIDR
 enable_vpn_portal: 启用VPN门户
@@ -192,7 +192,7 @@ about:
   author: 作者
   homepage: 主页
   license: 许可证
-  description: 一个简单、安全、去中心化的内网穿透 VPN 组网方案，使用 Rust 语言和 Tokio 框架实现。
+  description: 一个简单、安全、的组网方案。
   check_update: 检查更新
 
 event:
