@@ -3,21 +3,6 @@ name: EasyTier Release
 on:
   workflow_dispatch:
     inputs:
-      core_run_id:
-        description: 'The run id of EasyTier-Core Action in EasyTier repo'
-        type: number
-        default: 10322498549
-        required: true
-      gui_run_id:
-        description: 'The run id of EasyTier-GUI Action in EasyTier repo'
-        type: number
-        default: 10322498557
-        required: true
-      mobile_run_id:
-        description: 'The run id of EasyTier-Mobile Action in EasyTier repo'
-        type: number
-        default: 10322498555
-        required: true
       version:
         description: 'Version for this release'
         type: string
@@ -37,63 +22,74 @@ jobs:
     if: contains('["zzxym"]', github.actor)
     runs-on: ubuntu-latest
     steps:
-      -
-        name: Checkout
+      - name: Checkout
         uses: actions/checkout@v4
+        
+      # 创建资产目录
+      - name: Create artifacts directory
+        run: mkdir -p release_assets
 
-      - name: Download Core Artifact
-        uses: dawidd6/action-download-artifact@v11
+      # 下载特定版本的所有发布资产
+      - name: Download Release Assets
+        uses: montudor/action-download-release-asset@v2.1
         with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          run_id: ${{ inputs.core_run_id }}
-          repo: EasyTier/EasyTier
-          path: release_assets
-
-      - name: Download GUI Artifact
-        uses: dawidd6/action-download-artifact@v11
-        with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          run_id: ${{ inputs.gui_run_id }}
-          repo: EasyTier/EasyTier
-          path: release_assets_nozip
-
-      - name: Download Mobile Artifact
-        uses: dawidd6/action-download-artifact@v11
-        with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          run_id: ${{ inputs.mobile_run_id }}
-          repo: EasyTier/EasyTier
-          path: release_assets_nozip
-
-      - name: Zip release assets
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repo: 'EasyTier/EasyTier'
+          version: ${{ inputs.version }}
+          out-path: 'release_assets'
+      
+      # 打印下载的文件列表 (可选，用于调试)
+      - name: List downloaded assets
+        run: |
+          echo "Downloaded assets:"
+          ls -l release_assets
+          
+      # 处理特殊需求：解压然后重新打包为命名规范的压缩包
+      - name: Process Assets
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          mkdir zipped_assets
-
-          find release_assets_nozip -type f -exec mv {} zipped_assets \;
-          ls -l -R ./zipped_assets
-
-          cd release_assets
-          ls -l -R ./
-          chmod -R 755 .
-          for x in `ls`; do
-            if [ "$x" = "Easytier-Magisk" ]; then
-              # for Easytier-Magisk, make sure files are in the root of the zip
-              cd $x;
-              zip -r ../../zipped_assets/$x-${VERSION}.zip .;
-              cd ..;
+          # 创建临时工作目录
+          mkdir temp_assets processed_assets
+          
+          # 处理每个下载的资产
+          for file in release_assets/*; do
+            filename=$(basename "$file")
+            base_name="${filename%.*}"
+            
+            echo "==> Processing: $base_name"
+            
+            # 特殊处理：Easytier-Magisk 压缩包
+            if [[ "$base_name" == "Easytier-Magisk"* ]]; then
+              # 解压到以版本号命名的新目录
+              mkdir -p "temp_assets/Easytier-Magisk-$VERSION"
+              unzip -q "$file" -d "temp_assets/Easytier-Magisk-$VERSION"
+              
+              # 重新压缩到 processed_assets 目录
+              cd "temp_assets/Easytier-Magisk-$VERSION"
+              zip -r "../../processed_assets/Easytier-Magisk-$VERSION.zip" .
+              cd ../..
+            # 其他压缩包只需重命名
             else
-              zip -r ../zipped_assets/$x-${VERSION}.zip $x;
+              new_name="${base_name}-${VERSION}.${file##*.}"
+              cp "$file" "processed_assets/$new_name"
             fi
           done
-
+          
+          # 清理临时文件
+          rm -rf temp_assets
+          
+          # 打印最终文件列表
+          echo "Processed assets:"
+          ls -l processed_assets
+      
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ inputs.version }}
           draft: true
           files: |
-            ./zipped_assets/*
+            processed_assets/*
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ inputs.version }}
+          make_latest: ${{ inputs.make_latest }}
